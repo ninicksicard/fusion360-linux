@@ -1,5 +1,15 @@
 #!/bin/bash
-set -euo pipefail
+set -Eeuo pipefail
+
+fail() {
+  echo "launch-fusion.sh failed: $*" >&2
+  exit 1
+}
+
+on_error() {
+  echo "launch-fusion.sh failed near line $1: $2" >&2
+}
+trap 'on_error "$LINENO" "$BASH_COMMAND"' ERR
 
 export PROTON_USE_WINED3D=0
 export DXVK_ASYNC=1
@@ -15,12 +25,13 @@ export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
 
 PROTON="$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton10-32/proton"
 FUSION_ROOT="$STEAM_COMPAT_DATA_PATH/pfx/drive_c/users/steamuser/AppData/Local/Autodesk/webdeploy/production"
-FUSION_EXE="$(find "$FUSION_ROOT" -maxdepth 2 -name Fusion360.exe | sort | tail -n 1)"
 
-if [[ -z "$FUSION_EXE" ]]; then
-  echo "Fusion360.exe was not found under $FUSION_ROOT" >&2
-  exit 1
-fi
+[[ -x "$PROTON" ]] || fail "Proton was not found or is not executable: $PROTON"
+[[ -x "$BROWSER" ]] || fail "Browser bridge was not found or is not executable: $BROWSER"
+[[ -d "$FUSION_ROOT" ]] || fail "Fusion production directory was not found: $FUSION_ROOT"
+
+FUSION_EXE="$(find "$FUSION_ROOT" -maxdepth 2 -name Fusion360.exe -print | sort | tail -n 1)"
+[[ -n "$FUSION_EXE" ]] || fail "Fusion360.exe was not found under $FUSION_ROOT"
 
 FUSION_DIR="$(dirname "$FUSION_EXE")"
 PRODUCTION_CONFIG="$FUSION_DIR/Applications/Fusion/Fusion360App/ApplicationOptions.production.json"
@@ -28,6 +39,12 @@ SERVER_CONFIG="$FUSION_DIR/Fusion 360.server.config"
 
 if [[ -f "$PRODUCTION_CONFIG" ]]; then
   cp "$PRODUCTION_CONFIG" "$SERVER_CONFIG"
+else
+  echo "launch-fusion.sh warning: production config was not found: $PRODUCTION_CONFIG" >&2
 fi
 
-exec "$PROTON" run "$FUSION_EXE" "$@"
+set +e
+"$PROTON" run "$FUSION_EXE" "$@"
+status=$?
+set -e
+[[ $status -eq 0 ]] || fail "Fusion exited or crashed with status $status"
