@@ -1,4 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-printf "%s\n" "$(date -Is) $*" >> /tmp/fusion-browser.log
-exec /usr/bin/google-chrome --new-window "$@"
+BROWSER_EXECUTABLE="${BROWSER_EXECUTABLE:-/usr/bin/google-chrome}"
+BROWSER_LOG_FILE="${BROWSER_LOG_FILE:-/tmp/fusion-browser.log}"
+printf "%s\n" "$(date -Is) $*" >> "$BROWSER_LOG_FILE"
+exec "$BROWSER_EXECUTABLE" --new-window "$@"

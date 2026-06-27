@@ -1,4 +1,4 @@
-.PHONY: run kill ps log
+.PHONY: run assistant kill ps log
 
 FUSION_PATTERN := [F]usion360|[A]dskIdentity|[A]DPClientService|[m]sedgewebview2|[a]dexmtsv|[p]roton run $(HOME)/.fusion360-proton2|[s]team.exe .*[F]usion360
 
@@ -7,6 +7,9 @@ FUSION_USER_LOG_DIR := $(HOME)/.fusion360-proton2/pfx/drive_c/users/steamuser/Ap
 
 run:
 	bash -x ./launch-fusion.sh
+
+assistant:
+	./launch-fusion.sh --assistant
 
 kill:
 	@pkill -f '$(FUSION_PATTERN)' || true

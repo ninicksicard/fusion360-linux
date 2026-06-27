@@ -6,7 +6,7 @@ This is not an official Autodesk setup. It is a pragmatic wrapper around a Proto
 
 ## Installation
 
-The shortest working path is to keep the same directory layout used by the scripts.
+The shortest working path is to keep the same directory layout used by the scripts. You can also run the assistant to select your Proton, Fusion, Steam, browser, and WebView2 settings instead of editing scripts.
 
 ### 1. Put this repo in place
 
@@ -68,6 +68,18 @@ cd ~/fusion
 make run
 ```
 
+To choose the directories and executables with a small UI, run:
+
+```bash
+make assistant
+```
+
+The assistant uses `zenity` when available, `kdialog` when available, and terminal prompts otherwise. It writes settings to:
+
+```text
+~/.config/fusion360-linux/settings
+```
+
 Check whether it is running:
 
 ```bash
@@ -90,13 +102,7 @@ tail -n 20 /tmp/fusion-browser.log
 
 Copy the latest Autodesk sign-in URL into Chrome manually. Do not share this URL; it can contain authentication state.
 
-`fusion-browser.sh` uses:
-
-```text
-/usr/bin/google-chrome
-```
-
-If your Chrome binary is elsewhere, edit `fusion-browser.sh`.
+`fusion-browser.sh` uses `/usr/bin/google-chrome` by default. If your Chrome binary is elsewhere, run `make assistant` and select the browser executable.
 
 ## Notes
 
