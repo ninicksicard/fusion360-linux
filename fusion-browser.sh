@@ -11,10 +11,15 @@ on_error() {
 }
 trap 'on_error "$LINENO" "$BASH_COMMAND"' ERR
 
-CHROME=/usr/bin/google-chrome
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/fusion360-linux/config"
+CHROME="${CHROME:-/usr/bin/google-chrome}"
 LOG_FILE=/tmp/fusion-browser.log
 
-[[ -x "$CHROME" ]] || fail "Chrome was not found or is not executable: $CHROME"
+if [[ -f "$CONFIG_FILE" ]]; then
+  source "$CONFIG_FILE"
+fi
+
+[[ -x "$CHROME" ]] || fail "Chrome was not found or is not executable: $CHROME. Run launch-fusion.sh --configure to select it."
 printf "%s\n" "$(date -Is) $*" >> "$LOG_FILE"
 set +e
 "$CHROME" --new-window "$@"

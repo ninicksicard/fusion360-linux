@@ -61,6 +61,32 @@ When the installer finishes, `Fusion360.exe` should appear under:
 
 `launch-fusion.sh` finds the current `Fusion360.exe` automatically.
 
+
+### Optional: choose paths with file browsers
+
+If your Proton, Steam, Fusion, browser bridge, or Chrome locations differ from the defaults, run the setup UI:
+
+```bash
+./launch-fusion.sh --configure
+```
+
+The setup uses `zenity` file browser dialogs and clearly labels each selection:
+
+- Proton executable
+- Proton prefix directory
+- Steam install directory
+- Fusion production directory
+- Browser bridge script
+- Chrome executable
+
+Selections are saved in:
+
+```text
+~/.config/fusion360-linux/config
+```
+
+You can still override selections for one launch with environment variables such as `PROTON`, `STEAM_COMPAT_DATA_PATH`, `STEAM_COMPAT_CLIENT_INSTALL_PATH`, `FUSION_ROOT`, `BROWSER`, and `CHROME`.
+
 ### 5. Run Fusion 360
 
 ```bash
@@ -96,7 +122,7 @@ Copy the latest Autodesk sign-in URL into Chrome manually. Do not share this URL
 /usr/bin/google-chrome
 ```
 
-If your Chrome binary is elsewhere, edit `fusion-browser.sh`.
+If your Chrome binary is elsewhere, run `./launch-fusion.sh --configure` and select the Chrome executable.
 
 ## Notes
 
