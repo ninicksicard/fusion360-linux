@@ -18,6 +18,9 @@ BROWSER="${BROWSER:-$SCRIPT_DIR/fusion-browser.sh}"
 BROWSER_LISTENER="${BROWSER_LISTENER:-$SCRIPT_DIR/fusion-browser-listener.sh}"
 CALLBACK_HANDLER="${CALLBACK_HANDLER:-$SCRIPT_DIR/fusion-callback-handler.sh}"
 CHROME="${CHROME:-/usr/bin/google-chrome}"
+FUSION_WINE_DPI="${FUSION_WINE_DPI:-auto}"
+FUSION_WINE_DPI_FALLBACK="${FUSION_WINE_DPI_FALLBACK:-144}"
+FUSION_DPI_LOG_FILE="/tmp/fusion360-dpi.log"
 
 BRIDGE_BROWSER_REQUEST_DIR="/tmp/fusion360-browser-requests"
 BRIDGE_BROWSER_PROCESSED_DIR="/tmp/fusion360-browser-processed"
@@ -116,6 +119,84 @@ clear_bridge_temp_files() {
   find "$BRIDGE_CALLBACK_PROCESSED_DIR" -type f \( -name "*.request" -o -name "*.partial" \) -delete 2>/dev/null || true
 }
 
+
+read_gsettings_number() {
+  local schema_name="$1"
+  local key_name="$2"
+  local raw_value
+
+  command -v gsettings >/dev/null 2>&1 || return 1
+
+  raw_value="$(gsettings get "$schema_name" "$key_name" 2>/dev/null)" || return 1
+  printf "%s\n" "$raw_value" | grep -Eo '[0-9]+([.][0-9]+)?' | tail -n 1
+}
+
+scale_to_dpi() {
+  local scale_value="$1"
+
+  awk -v scale_value="$scale_value" 'BEGIN { printf "%d", (96 * scale_value) + 0.5 }'
+}
+
+resolve_fusion_wine_dpi() {
+  local cinnamon_scaling_factor
+  local cinnamon_text_scaling_factor
+
+  if printf "%s\n" "$FUSION_WINE_DPI" | grep -Eq '^[0-9]+$'; then
+    printf "%s" "$FUSION_WINE_DPI"
+    return 0
+  fi
+
+  cinnamon_text_scaling_factor="$(read_gsettings_number org.cinnamon.desktop.interface text-scaling-factor || true)"
+  cinnamon_scaling_factor="$(read_gsettings_number org.cinnamon.desktop.interface scaling-factor || true)"
+
+  if [[ -n "$cinnamon_text_scaling_factor" ]]; then
+    if awk -v value="$cinnamon_text_scaling_factor" 'BEGIN { exit !(value > 0 && value != 1) }'; then
+      scale_to_dpi "$cinnamon_text_scaling_factor"
+      return 0
+    fi
+  fi
+
+  if [[ -n "$cinnamon_scaling_factor" ]]; then
+    if awk -v value="$cinnamon_scaling_factor" 'BEGIN { exit !(value > 1) }'; then
+      scale_to_dpi "$cinnamon_scaling_factor"
+      return 0
+    fi
+  fi
+
+  printf "%s" "$FUSION_WINE_DPI_FALLBACK"
+}
+
+apply_fusion_wine_dpi() {
+  local dpi_value
+  local win8_dpi_scaling
+
+  dpi_value="$(resolve_fusion_wine_dpi)"
+
+  if [[ "$dpi_value" -eq 96 ]]; then
+    win8_dpi_scaling=0
+  else
+    win8_dpi_scaling=1
+  fi
+
+  {
+    echo "timestamp=$(date -Is)"
+    echo "FUSION_WINE_DPI=$FUSION_WINE_DPI"
+    echo "FUSION_WINE_DPI_FALLBACK=$FUSION_WINE_DPI_FALLBACK"
+    echo "resolved_dpi=$dpi_value"
+    echo "win8_dpi_scaling=$win8_dpi_scaling"
+    echo "cinnamon_scaling_factor=$(read_gsettings_number org.cinnamon.desktop.interface scaling-factor || true)"
+    echo "cinnamon_text_scaling_factor=$(read_gsettings_number org.cinnamon.desktop.interface text-scaling-factor || true)"
+  } > "$FUSION_DPI_LOG_FILE"
+
+  "$PROTON" run reg add 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d "$dpi_value" /f >> "$FUSION_DPI_LOG_FILE" 2>&1 || {
+    echo "launch-fusion.sh warning: failed to set LogPixels. See $FUSION_DPI_LOG_FILE" >&2
+  }
+
+  "$PROTON" run reg add 'HKCU\Control Panel\Desktop' /v Win8DpiScaling /t REG_DWORD /d "$win8_dpi_scaling" /f >> "$FUSION_DPI_LOG_FILE" 2>&1 || {
+    echo "launch-fusion.sh warning: failed to set Win8DpiScaling. See $FUSION_DPI_LOG_FILE" >&2
+  }
+}
+
 install_callback_protocol_handlers() {
   local applications_dir
   local desktop_file
@@ -171,7 +252,6 @@ cleanup() {
 }
 
 load_config
-
 if [[ "${1:-}" == "--configure" ]]; then
   configure_with_file_browsers
   exit 0
@@ -189,16 +269,19 @@ if [[ $missing_selection -eq 1 && -t 1 && -n "${DISPLAY:-}" && -z "${FUSION_SKIP
   configure_with_file_browsers
 fi
 
-export PROTON_USE_WINED3D=0
+export PROTON_USE_WINED3D=1
 export PROTON_USE_XALIA=0
 export DXVK_ASYNC=1
-export NO_AT_BRIDGE=1
+export NO_AT_BRIDGE=0
 export BROWSER
 export BROWSER_LISTENER
 export CALLBACK_HANDLER
 export CHROME
+export FUSION_WINE_DPI
+export FUSION_WINE_DPI_FALLBACK
 export WINEDLLOVERRIDES="bcp47langs="
 export WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--no-sandbox"
+export VK_ICD_FILENAMES="/usr/share/vulkan/icd.d/intel_icd.x86_64.json:/usr/share/vulkan/icd.d/intel_icd.i686.json"
 export STEAM_COMPAT_DATA_PATH
 export STEAM_COMPAT_CLIENT_INSTALL_PATH
 
@@ -224,10 +307,17 @@ fi
 
 trap cleanup EXIT INT TERM
 
+apply_fusion_wine_dpi
+
+"$PROTON" run reg add 'HKCU\Software\Wine\X11 Driver' /v UseTakeFocus /t REG_SZ /d N /f >/tmp/fusion360-x11-driver.log 2>&1
+
 install_callback_protocol_handlers
 register_wine_browser_bridge
 start_browser_listener
+"$SCRIPT_DIR/fusion-gray-overlay-event-killer.sh" &
+OVERLAY_KILLER_PID="$!"
 
+trap 'kill "$OVERLAY_KILLER_PID" 2>/dev/null || true' EXIT
 "$PROTON" run "$FUSION_EXE" "$@"
 fusion_status=$?
 
