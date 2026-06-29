@@ -1,3 +1,12 @@
+# me : 
+
+hey! was annoyed at all the mess involved in starting fusion 360 on linux. managed to fix the login issue happening because of bad webview integration. basicly, a script on wine side writes the login credential token to a file, and a script on thelinux side reads them to launch the browser. it works with chromium browser, opera and probably all the others. then the scripts transfers back the token to the wine side using another file and the wine side script respond to fusion. È
+anyways, also made a basic hack/workaround to  deal with the fusion360 ui blocking the whole area when trying to open a file. the gray overlay is detected by the window manager and deleted after a short moment. I also added option to change the scaling of the ui at launch.
+
+I forked the script but ended up mostly writing the script with ai.. soo its a bit sloppy, but it works good enough for me. hopefully this fix helps more people switch away from micro$lop.
+
+
+
 # Fusion 360 on Linux via Proton
 
 Small helper scripts for running Autodesk Fusion 360 on Linux with Proton or GE-Proton.
